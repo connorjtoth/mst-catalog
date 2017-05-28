@@ -1,5 +1,5 @@
 // content.js
-function drawPopup( ) {
+function drawPopup( contentChild ) {
 
   // debounce for clicking on the popup
   var debounce = false;
@@ -12,13 +12,12 @@ function drawPopup( ) {
   
   // the CSS properties we want to set
   var popupStyles = {
-    backgroundColor: 'black',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     position: 'fixed',
     top: 0,
     left: 0,
     width: '150%',
     height: '150%',
-    opacity: '.7'
   };
 
   // update the style of the popup element
@@ -33,9 +32,8 @@ function drawPopup( ) {
     top: '25%',
     left: '25%',
     width: '50%',
-    height: '50%',
-    opacity: '1',
-    borderRadius: '20px'
+    borderRadius: '20px',
+    padding: '20px'
   };
 
   // update the style of the content element
@@ -69,40 +67,15 @@ function drawPopup( ) {
   popup.addEventListener('click', onPopupClicked);
 
   // put the popup together
+  content.appendChild(contentChild);
   popup.appendChild(content);
   document.body.appendChild(popup);
+
+  return popup;
 }
 
-
-function createBubble(data)
-{
-  var bubble = document.createElement('div');
-  bubble.className = 'lfjsbubble';
-  bubble.style = 'width: 450px; position: absolute; top: 299.4px; left: 0px; display: block;';
-
-  var closeButton = document.createElement('img');
-  closeButton.id = 'lfjsbubbleclose';
-  closeButton.title = 'Close';
-  closeButton.src = '/js/lfjsimages/cancel.gif';
-  bubble.appendChild(closeButton);
-
-  var top = document.createElement('div');
-  top.className = 'lfjsbubbletop';
-  bubble.appendChild(top);
-
-  var topRight = document.createElement('div');
-  topRight.className = 'lfjsbubbletopright';
-  bubble.appendChild(topRight);
-
-  var  mainWrapper = document.createElement('div');
-  mainWrapper.className = 'lfjsbubblemainwrapper';
-
-  var main = document.createElement('div');
-  main.className = 'lfjsbubblemain';
-
-  var content = document.createElement('div');
-  content.className = 'lfjsbubblecontent';
-
+function createCourseBlock(data) {
+  
   var block = document.createElement('div');
   block.className = 'courseblock';
 
@@ -130,31 +103,7 @@ function createBubble(data)
   blockDesc.appendChild(descText);
   block.appendChild(blockDesc);
 
-  content.appendChild(block);
-  main.appendChild(content);
-  mainWrapper.appendChild(main);
-  bubble.appendChild(mainWrapper);
-
-  var bottom = document.createElement('div');
-  bottom.className = 'lfjsbubblebottom';
-  bubble.appendChild(bottom);
-
-  var bottomRight = document.createElement('div');
-  bottomRight.className = 'lfjsbubblebottomright';
-  bubble.appendChild(bottomRight);
-
-  var tail = document.createElement('div');
-  tail.className = 'lfjsbubbletail left';
-  tail.style = {'right': '397.4px'};
-  bubble.appendChild(tail);
-
-  closeButton.addEventListener('click', function ( ) {
-    bubble.style = 'display: none;';
-    bubble.remove();
-//    (function ( ) { return bubble.parentElement})().removeChild(bubble);
-  })
-
-  return bubble;
+  return block;
 }
 
 
@@ -179,7 +128,6 @@ function loadJSON ( fileUrl, callback ) {
   // send request
   xobj.send(null);
 }
-
 
 
 chrome.runtime.onMessage.addListener( function (request, sender, sendResponse) {
@@ -210,67 +158,67 @@ chrome.runtime.onMessage.addListener( function (request, sender, sendResponse) {
       // create a non-live list of all elements in the document
       var elements = document.querySelectorAll('*');
 
+      // look through each element
       for ( var element of elements ) {
-
+        for ( let nameIndex = 0; nameIndex < courseNames.length; nameIndex++ ) {
+        
         // for each element, we look at its children nodes
         for ( var childIndex = 0; childIndex < element.childNodes.length; childIndex++ ) {
           var child = element.childNodes[childIndex];
           
-          // if the child is a text node, then we examine it further
-          if ( child.nodeType === Node.TEXT_NODE ) {
+            // if the child is a text node, then we examine it further
+            if ( child.nodeType === Node.TEXT_NODE ) {
 
-            var childText = child.nodeValue;
-            var replacementText = childText.replace(regExpNames[0], '$' + regExpNames[0]);
+              // if we found a course dept + number then we contine
+              if (childText.search(regExpNames[nameIndex]) !== -1) {
 
-            // if we found a course dept+number then we continue
-            if (childText !== replacementText) {
+                // split the text at the course dept+number, (inclusive of delimeter)
+                var splitText = childText.split(regExpNames[nameIndex]);
 
-              // split the text at the course dept+number, (inclusive of delimeter)
-              var splitText = childText.split(regExpNames[0]);
+                // last represents the last element that was added into the element
+                var last = null;
 
-              // last represents the last element that was added into the element
-              var last = null;
-
-              // 
-              for (var subIndex = splitText.length - 1; subIndex >= 0; subIndex-- ) {
-                
-                var subText = splitText[subIndex];
-                
-                var newTextNode = document.createTextNode(subText);
-
-                var parentNode = null;
-                if (subText.match(regExpNames[0])) {
+                // 
+                for (var subIndex = splitText.length - 1; subIndex >= 0; subIndex-- ) {
                   
-                  parentNode = document.createElement('a');
-                  parentNode.href = '#';
+                  var subText = splitText[subIndex];
                   
-                  parentNode.addEventListener('click', function ( ) {
+                  var newTextNode = document.createTextNode(subText);
 
-                    var bubble = createBubble( courseData[courseNames[0]] );
-                    console.log(bubble);
-                    console.log(this);
-                    this.parentNode.insertBefore(bubble, this.nextSibling);
-                  });
+                  var parentNode = null;
+                  if (subText.match(regExpNames[nameIndex])) {
+                    
+                    parentNode = document.createElement('a');
+                    parentNode.href = '#';
+                    
+                    parentNode.addEventListener('click', function ( ) {
 
-                  parentNode.appendChild(newTextNode);
-                }
+                      var block = createCourseBlock(courseData[courseNames[nameIndex]]);
 
-                // if we have already inserted an element, we relate to last
-                // if not, we must first replace the current child
+                      var popup = drawPopup(block);
+                      console.log(this);
+                    });
 
-                var temp = parentNode;
-                if (parentNode === null) {
-                  temp = newTextNode;
-                }
+                    parentNode.appendChild(newTextNode);
+                  }
 
-                if (last === null) { 
-                  element.replaceChild(temp, child);
-                  last = temp;
-                }
-                else {
-                  element.insertBefore(temp, last);
-                  last = temp;
-                  childIndex++;
+                  // if we have already inserted an element, we relate to last
+                  // if not, we must first replace the current child
+
+                  var temp = parentNode;
+                  if (parentNode === null) {
+                    temp = newTextNode;
+                  }
+
+                  if (last === null) { 
+                    element.replaceChild(temp, child);
+                    last = temp;
+                  }
+                  else {
+                    element.insertBefore(temp, last);
+                    last = temp;
+                    childIndex++;
+                  }
                 }
               }
             }

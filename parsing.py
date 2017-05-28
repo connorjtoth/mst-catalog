@@ -89,13 +89,12 @@ def get_class_tuples_from_html ( html ):
     course_name = '';
     for string in titleblock.strings:
       course_name += string;
-    #' '.join(course_name.splitlines());
     
     # obtain the description
     description = '';
     for string in descblock.strings:
       description += string;
-    #' '.join(description.splitlines());
+
     # push the new tuple to the aggregation
     tuples += [( dept_plus_num, course_name, description )];
 
@@ -111,7 +110,7 @@ def main ( ):
   master = {};
 
   # file to store all the tuples in
-  file = open('courses2.json', 'w');
+  file = open('courses.json', 'w');
 
   # for each url we visit
   for url in urls:
