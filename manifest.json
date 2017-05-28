@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Missouri S&T Catalog Assist",
-  "version": "0.1",
+  "version": "0.7",
 
   "content_scripts": [
     {
@@ -23,5 +23,9 @@
     "scripts": [
       "background.js"
     ]
-  }
+  },
+
+  "web_accessible_resources": [
+    "courses.json"
+  ]
 }

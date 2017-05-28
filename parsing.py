@@ -4,6 +4,7 @@
 import urllib2
 from bs4 import BeautifulSoup
 import time    
+import json
 
 # url of the page that has the menu on it
 ROOT_ADDR = 'http://catalog.mst.edu';
@@ -88,12 +89,13 @@ def get_class_tuples_from_html ( html ):
     course_name = '';
     for string in titleblock.strings:
       course_name += string;
+    #' '.join(course_name.splitlines());
     
     # obtain the description
     description = '';
     for string in descblock.strings:
       description += string;
-    
+    #' '.join(description.splitlines());
     # push the new tuple to the aggregation
     tuples += [( dept_plus_num, course_name, description )];
 
@@ -105,9 +107,39 @@ def main ( ):
   # get the urls we need to visit to get class information
   urls = get_urls();
 
+  # master object
+  master = {};
+
+  # file to store all the tuples in
+  file = open('courses2.json', 'w');
+
   # for each url we visit
   for url in urls:
+
+    # get the HTML source code from that URL
     html = get_html_from_url(url);
+
+    # create the course tuples from those pages
     tuples = get_class_tuples_from_html(html);
-    print(tuples);
-    print('\n');
+
+    # add the data into the JSON object
+    for tup in tuples:
+
+      tup_obj = {
+        'course_name': tup[1],
+        'description': tup[2],
+        'address'    : url
+      };
+
+      # push the tuple to the master with a key value
+      # of the course dept + number
+      master[tup[0]] = tup_obj;
+
+  # write the file JSON equivalent (pretty too!)
+  file.write( json.dumps(master, indent = 2, sort_keys=True, separators=(',', ': ')) );
+
+  # close the file
+  file.close( );
+
+
+main ( );
