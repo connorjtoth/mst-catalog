@@ -1,4 +1,20 @@
 // content.js
+var re;
+var keys = [];
+var fourDigits = '(\\d{4})';
+var orPart = '\\s+\\(?or\\s+' + fourDigits + '\\)?';
+var andPart = '\\s*\\,?(and|\\&)?\\s+' + fourDigits;
+var digitsRegex = '(' + fourDigits + '(' + orPart + '|' + andPart + ')*)';
+                
+var regexAddendum = digitsRegex;
+
+function getRelevantNumbers ( regexResult ) {
+
+  var nums = [];
+  nums = regexResult.match(/\d{4}/gi);
+  return nums;
+}
+
 function drawPopup( contentChild ) {
 
   // debounce for clicking on the popup
@@ -146,11 +162,34 @@ chrome.runtime.onMessage.addListener( function (request, sender, sendResponse) {
       // create a separate list of only the Dept + Course Numbers exactly as
       // used as the keys in courseData
       var courseNames = Object.keys(courseData);
+
+      // create a list of only the prefixes used by each department
+      var deptNames = [];
+      var regExpDeptNames = [];
       
       // create a separate list of regular expressions where whitespace of
       // any kind can be used to separate the words
       var regExpNames = [];
       for ( var courseName of courseNames ) {
+
+        var newDeptName = '';
+        var newRegExpDeptname = '';
+        for (word of courseName.split(' ')) {
+          if (word.match(/\d/)) {
+            break;
+          }
+          if (newDeptName !== '') {
+            newDeptName += ' ';
+            newRegExpDeptname += '\\s+'
+          }
+          newDeptName += word;
+          newRegExpDeptname += word;
+        }
+
+        if (!deptNames.includes(newDeptName)) {
+          deptNames.push(newDeptName);
+          regExpDeptNames.push(newRegExpDeptname);
+        }
         
         // replace spaces with arbitrary whitespace
         var regExpName = courseName.replace(/\s+/gi, '[\\s+]');
@@ -160,13 +199,14 @@ chrome.runtime.onMessage.addListener( function (request, sender, sendResponse) {
         var captureRegExpName = new RegExp('\(' + regExpName + '\)', 'i');
         regExpNames.push(captureRegExpName);
       }
-
+      console.log(deptNames);
       // create a non-live list of all elements in the document
       var elements = document.querySelectorAll('*');
 
       // look through each element
       for ( var element of elements ) {
-        for ( let nameIndex = 0; nameIndex < courseNames.length; nameIndex++ ) {
+        
+        for ( let nameIndex = 0; nameIndex < deptNames.length; nameIndex++ ) {
         
         // for each element, we look at its children nodes
         for ( var childIndex = 0; childIndex < element.childNodes.length; childIndex++ ) {
@@ -175,38 +215,67 @@ chrome.runtime.onMessage.addListener( function (request, sender, sendResponse) {
             // if the child is a text node, then we examine it further
             if ( child.nodeType === Node.TEXT_NODE ) {
 
-              if ( element.tagName === 'A' && element.href !== '#')
-              {
+              if ( element.tagName === 'A' && element.href !== '#') {
                 continue;
               }
 
               var childText = child.nodeValue;
-              // if we found a course dept + number then we contine
-              if (childText.search(regExpNames[nameIndex]) !== -1) {
+              var splitText = [];
 
-                // split the text at the course dept+number, (inclusive of delimeter)
-                var splitText = childText.split(regExpNames[nameIndex]);
+              var searchRegex = new RegExp(regExpDeptNames[nameIndex] + '\\s+' + regexAddendum, 'i');
+              
+              // if we found a course dept + number then we continue
+              if ( childText.search(searchRegex) !== -1 ) {
 
-                // last represents the last element that was added into the element
+
+                var result = childText.match(searchRegex);
+                
+                var nums = getRelevantNumbers(result[0]);
+
+                var splitPoints = [result.index];
+                for (var numIndex = 0; numIndex < nums.length; numIndex++) {
+                  var num = nums[numIndex];
+                  if (numIndex != 0) {
+                    splitPoints.push(result.index + result[0].indexOf(num));
+                  }
+                  splitPoints.push(result.index + result[0].indexOf(num) + 4);
+                  
+                }
+                splitPoints.push(result.index + result[0].length);
+
+                // nothing special is needed of this element
+                splitText.push(childText.slice(0, result.index));
+
+                for (pointIndex = 1; pointIndex < splitPoints.length; pointIndex++) {
+                  var lastPoint = splitPoints[pointIndex - 1];
+                  var point = splitPoints[pointIndex];
+                  splitText.push(childText.slice(lastPoint, point));
+                }
+
+                splitText.push(childText.slice(result.index + result[0].length));
+
+                
                 var last = null;
 
-                // 
-                for (var subIndex = splitText.length - 1; subIndex >= 0; subIndex-- ) {
+                
+                for (let subIndex = splitText.length - 1; subIndex >= 0; subIndex-- ) {
                   
-                  var subText = splitText[subIndex];
+                  let subText = splitText[subIndex];
                   
-                  var newTextNode = document.createTextNode(subText);
+                  let newTextNode = document.createTextNode(subText);
 
-                  var parentNode = null;
-                  if (subText.match(regExpNames[nameIndex])) {
-                    
+                  let parentNode = null;
+                  if ( (subText.match(searchRegex) && subText.match(searchRegex)[0] === subText)
+                   || (subText.match(fourDigits) && subText.match(fourDigits)[0] === subText) ) {
+
+                    let dept = deptNames[nameIndex];
+                    let num = subText.match( new RegExp(fourDigits, 'i'))[0];
+                    let key = dept + ' ' + num;
                     parentNode = document.createElement('a');
                     parentNode.href = '#';
-                    
                     parentNode.addEventListener('click', function ( ) {
-
-                      var block = createCourseBlock(courseData[courseNames[nameIndex]]);
-
+                      console.log(key);
+                      var block = createCourseBlock(courseData[key]);
                       var popup = drawPopup(block);
                       console.log(this);
                     });
