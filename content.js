@@ -1,17 +1,22 @@
 // content.js
-var re;
-var keys = [];
-var fourDigits = '(\\d{4})';
+var fourDigits = '\\d{4}';
 var orPart = '\\s+\\(?or\\s+' + fourDigits + '\\)?';
 var andPart = '\\s*\\,?(and|\\&)?\\s+' + fourDigits;
 var digitsRegex = '(' + fourDigits + '(' + orPart + '|' + andPart + ')*)';
-                
+
+var fourDigitRE = /\d{4}/;
+var orPart = /\s+\(?or\s+\d{4}\)?/;
+var andPart = /\s*\,?(and|\&)?\s+\d{4}/;
+var altogether = new RegExp('(' + fourDigitRE.source + '(' + orPart.source + '|' + andPart.source + ')*)', 'i' );
+//(\d{4}(\s+\(?or\s+\d{4}\)?|\s*\,?(and|\&)?\s+\d{4})*)
+console.log(altogether.source);
+console.log(digitsRegex);
 var regexAddendum = digitsRegex;
 
 function getRelevantNumbers ( regexResult ) {
 
   var nums = [];
-  nums = regexResult.match(/\d{4}/gi);
+  nums = regexResult.match(fourDigitRE.source, 'gi');
   return nums;
 }
 
@@ -199,7 +204,8 @@ chrome.runtime.onMessage.addListener( function (request, sender, sendResponse) {
         var captureRegExpName = new RegExp('\(' + regExpName + '\)', 'i');
         regExpNames.push(captureRegExpName);
       }
-      console.log(deptNames);
+
+
       // create a non-live list of all elements in the document
       var elements = document.querySelectorAll('*');
 
@@ -215,44 +221,46 @@ chrome.runtime.onMessage.addListener( function (request, sender, sendResponse) {
             // if the child is a text node, then we examine it further
             if ( child.nodeType === Node.TEXT_NODE ) {
 
-              if ( element.tagName === 'A' && element.href !== '#') {
+              if ( element.tagName === 'A' && element.href !== '') {
                 continue;
               }
-
               var childText = child.nodeValue;
               var splitText = [];
 
-              var searchRegex = new RegExp(regExpDeptNames[nameIndex] + '\\s+' + regexAddendum, 'i');
+              var searchRegex = new RegExp( regExpDeptNames[nameIndex] + '\\s+' + regexAddendum, 'i');
               
               // if we found a course dept + number then we continue
-              if ( childText.search(searchRegex) !== -1 ) {
+              let result = childText.match(searchRegex);
+              if ( result !== null ) {
 
-
-                var result = childText.match(searchRegex);
+                let resultString = result[0];
+                let resultStart = result.index;
+                let resultEnd = result.index + resultString.length;
                 
-                var nums = getRelevantNumbers(result[0]);
+                let nums = getRelevantNumbers(resultString);
 
-                var splitPoints = [result.index];
-                for (var numIndex = 0; numIndex < nums.length; numIndex++) {
-                  var num = nums[numIndex];
-                  if (numIndex != 0) {
-                    splitPoints.push(result.index + result[0].indexOf(num));
-                  }
-                  splitPoints.push(result.index + result[0].indexOf(num) + 4);
-                  
+                let splitPoints = [0, resultStart];
+                
+                for (let num of nums) {
+                  let firstIndex = resultStart + resultString.indexOf(num);
+
+                  splitPoints.push(firstIndex);
+                  splitPoints.push(firstIndex + 4);
                 }
-                splitPoints.push(result.index + result[0].length);
+                if (splitPoints.length > 2)
+                  splitPoints.splice(2,1);
+                
+                splitPoints.push(resultEnd);
 
-                // nothing special is needed of this element
-                splitText.push(childText.slice(0, result.index));
-
-                for (pointIndex = 1; pointIndex < splitPoints.length; pointIndex++) {
-                  var lastPoint = splitPoints[pointIndex - 1];
-                  var point = splitPoints[pointIndex];
+                for (let pointIndex = 1; pointIndex < splitPoints.length; pointIndex++) {
+                  let lastPoint = splitPoints[pointIndex - 1];
+                  let point = splitPoints[pointIndex];
                   splitText.push(childText.slice(lastPoint, point));
                 }
 
-                splitText.push(childText.slice(result.index + result[0].length));
+                splitText.push(childText.slice(resultEnd));
+
+                console.log(splitText.join('') === childText);
 
                 
                 var last = null;
@@ -265,14 +273,17 @@ chrome.runtime.onMessage.addListener( function (request, sender, sendResponse) {
                   let newTextNode = document.createTextNode(subText);
 
                   let parentNode = null;
-                  if ( (subText.match(searchRegex) && subText.match(searchRegex)[0] === subText)
-                   || (subText.match(fourDigits) && subText.match(fourDigits)[0] === subText) ) {
+                  if ( subText.match(new RegExp('^' + searchRegex.source + '$', 'i')) 
+                    || subText.match(new RegExp('^' + fourDigitRE.source + '$', 'i')) ) {
 
                     let dept = deptNames[nameIndex];
                     let num = subText.match( new RegExp(fourDigits, 'i'))[0];
                     let key = dept + ' ' + num;
+
+
                     parentNode = document.createElement('a');
                     parentNode.href = '#';
+
                     parentNode.addEventListener('click', function ( ) {
                       console.log(key);
                       var block = createCourseBlock(courseData[key]);
@@ -309,17 +320,8 @@ chrome.runtime.onMessage.addListener( function (request, sender, sendResponse) {
 
       console.log('All done!');
 
-
-
-
-
-
-
-
     });
 
   }
-
-
   
 })
