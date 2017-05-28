@@ -151,8 +151,14 @@ chrome.runtime.onMessage.addListener( function (request, sender, sendResponse) {
       // any kind can be used to separate the words
       var regExpNames = [];
       for ( var courseName of courseNames ) {
+        
+        // replace spaces with arbitrary whitespace
         var regExpName = courseName.replace(/\s+/gi, '[\\s+]');
-        regExpNames.push(new RegExp('\(' + regExpName + '\)', 'i') );
+
+        // create a capturing case-insensitive regular expression version
+        // of the courseName and push it to the list
+        var captureRegExpName = new RegExp('\(' + regExpName + '\)', 'i');
+        regExpNames.push(captureRegExpName);
       }
 
       // create a non-live list of all elements in the document
@@ -168,6 +174,11 @@ chrome.runtime.onMessage.addListener( function (request, sender, sendResponse) {
           
             // if the child is a text node, then we examine it further
             if ( child.nodeType === Node.TEXT_NODE ) {
+
+              if ( element.tagName === 'A' && element.href !== '#')
+              {
+                continue;
+              }
 
               var childText = child.nodeValue;
               // if we found a course dept + number then we contine
