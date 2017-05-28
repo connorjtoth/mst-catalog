@@ -169,6 +169,7 @@ chrome.runtime.onMessage.addListener( function (request, sender, sendResponse) {
             // if the child is a text node, then we examine it further
             if ( child.nodeType === Node.TEXT_NODE ) {
 
+              var childText = child.nodeValue;
               // if we found a course dept + number then we contine
               if (childText.search(regExpNames[nameIndex]) !== -1) {
 
