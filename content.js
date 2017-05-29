@@ -1,7 +1,7 @@
 // content.js
-var fourDigits = '\\d{4}';
+var fourDigits = '(\\d{4})';
 var orPart = '\\s+\\(?or\\s+' + fourDigits + '\\)?';
-var andPart = '\\s*\\,?(and|\\&)?\\s+' + fourDigits;
+var andPart = '\\s*\\,?\\s*(and|\\&)?\\s*' + fourDigits;
 var digitsRegex = '(' + fourDigits + '(' + orPart + '|' + andPart + ')*)';
 
 var fourDigitRE = /\d{4}/;
@@ -9,14 +9,16 @@ var orPart = /\s+\(?or\s+\d{4}\)?/;
 var andPart = /\s*\,?(and|\&)?\s+\d{4}/;
 var altogether = new RegExp('(' + fourDigitRE.source + '(' + orPart.source + '|' + andPart.source + ')*)', 'i' );
 //(\d{4}(\s+\(?or\s+\d{4}\)?|\s*\,?(and|\&)?\s+\d{4})*)
+
+// /((\d{4})(\s+\(?or\s+(\d{4})\)?|\s*\,?\s*(and|\&)?\s*(\d{4}))*)/
 console.log(altogether.source);
 console.log(digitsRegex);
 var regexAddendum = digitsRegex;
-
+console.log(fourDigitRE.source)
 function getRelevantNumbers ( regexResult ) {
 
   var nums = [];
-  nums = regexResult.match(fourDigitRE.source, 'gi');
+  nums = regexResult.match(new RegExp(fourDigitRE.source, 'gi'));
   return nums;
 }
 
@@ -150,6 +152,61 @@ function loadJSON ( fileUrl, callback ) {
   xobj.send(null);
 }
 
+// global variables: createCourseBlock, drawPopup, fourDigit(s|RE), 
+//  searchRegex, deptNames, 
+function traverseSplitText ( splitText, element, child, nameIndex, courseData, deptNames, searchRegex ) {
+  
+  let last = null;
+  let childIndexDelta = 0;
+
+  for (let subIndex = splitText.length - 1; subIndex >= 0; subIndex-- ) {
+    
+    let subText = splitText[subIndex];
+    
+    let newTextNode = document.createTextNode(subText);
+
+    let parentNode = null;
+    if ( subText.match(new RegExp('^(' + searchRegex.source + '|' + fourDigitRE.source + ')$', 'i')) ) { 
+    
+
+      let dept = deptNames[nameIndex];
+      let num = subText.match( new RegExp(fourDigits, 'i'))[0];
+      let key = dept + ' ' + num;
+
+
+      parentNode = document.createElement('a');
+      parentNode.href = '#';
+
+      parentNode.addEventListener('click', function ( ) {
+        console.log(key);
+        var block = createCourseBlock(courseData[key]);
+        var popup = drawPopup(block);
+        console.log(this);
+      });
+
+      parentNode.appendChild(newTextNode);
+    }
+
+    // if we have already inserted an element, we relate to last
+    // if not, we must first replace the current child
+
+    var temp = parentNode;
+    if (parentNode === null) {
+      temp = newTextNode;
+    }
+
+    if (last === null) {
+      element.replaceChild(temp, child);
+    }
+    else {
+      element.insertBefore(temp, last);
+      childIndexDelta++;
+    }
+    last = temp;
+  }
+  return childIndexDelta;
+}
+
 
 chrome.runtime.onMessage.addListener( function (request, sender, sendResponse) {
 
@@ -212,18 +269,23 @@ chrome.runtime.onMessage.addListener( function (request, sender, sendResponse) {
       // look through each element
       for ( var element of elements ) {
         
+        // if the element is already an element, then we do not need to even
+        // try doing anything with it
+        if ( element.tagName === 'A' && element.href !== ''){
+          continue;
+        }
+
+        // look through each department name
         for ( let nameIndex = 0; nameIndex < deptNames.length; nameIndex++ ) {
-        
-        // for each element, we look at its children nodes
-        for ( var childIndex = 0; childIndex < element.childNodes.length; childIndex++ ) {
-          var child = element.childNodes[childIndex];
           
+          // for each element, we look at its children nodes
+          for ( var childIndex = 0; childIndex < element.childNodes.length; childIndex++ ) {
+            var child = element.childNodes[childIndex];
+          
+        
             // if the child is a text node, then we examine it further
             if ( child.nodeType === Node.TEXT_NODE ) {
 
-              if ( element.tagName === 'A' && element.href !== '') {
-                continue;
-              }
               var childText = child.nodeValue;
               var splitText = [];
 
@@ -235,83 +297,40 @@ chrome.runtime.onMessage.addListener( function (request, sender, sendResponse) {
 
                 let resultString = result[0];
                 let resultStart = result.index;
-                let resultEnd = result.index + resultString.length;
+                let resultEnd = resultStart + resultString.length;
                 
                 let nums = getRelevantNumbers(resultString);
 
                 let splitPoints = [0, resultStart];
-                
-                for (let num of nums) {
-                  let firstIndex = resultStart + resultString.indexOf(num);
 
+                for ( let num of nums ) {
+                  let firstIndex = resultStart + resultString.indexOf(num);
                   splitPoints.push(firstIndex);
                   splitPoints.push(firstIndex + 4);
                 }
-                if (splitPoints.length > 2)
-                  splitPoints.splice(2,1);
+
+                if ( splitPoints.length >= 2 ) {
+                  splitPoints.splice(2, 1);
+                }
                 
                 splitPoints.push(resultEnd);
 
-                for (let pointIndex = 1; pointIndex < splitPoints.length; pointIndex++) {
-                  let lastPoint = splitPoints[pointIndex - 1];
-                  let point = splitPoints[pointIndex];
-                  splitText.push(childText.slice(lastPoint, point));
-                }
+                let lastPoint = splitPoints[0];
+                for ( let point of splitPoints ) {
 
+                  if (point == splitPoints[0]) continue;
+                  splitText.push(childText.slice(lastPoint, point));
+                  lastPoint = point;
+                }
                 splitText.push(childText.slice(resultEnd));
 
+                
                 console.log(splitText.join('') === childText);
 
                 
-                var last = null;
-
+                childIndex += traverseSplitText(splitText, element, child, nameIndex, courseData, deptNames, searchRegex )
+                childIndex--;
                 
-                for (let subIndex = splitText.length - 1; subIndex >= 0; subIndex-- ) {
-                  
-                  let subText = splitText[subIndex];
-                  
-                  let newTextNode = document.createTextNode(subText);
-
-                  let parentNode = null;
-                  if ( subText.match(new RegExp('^' + searchRegex.source + '$', 'i')) 
-                    || subText.match(new RegExp('^' + fourDigitRE.source + '$', 'i')) ) {
-
-                    let dept = deptNames[nameIndex];
-                    let num = subText.match( new RegExp(fourDigits, 'i'))[0];
-                    let key = dept + ' ' + num;
-
-
-                    parentNode = document.createElement('a');
-                    parentNode.href = '#';
-
-                    parentNode.addEventListener('click', function ( ) {
-                      console.log(key);
-                      var block = createCourseBlock(courseData[key]);
-                      var popup = drawPopup(block);
-                      console.log(this);
-                    });
-
-                    parentNode.appendChild(newTextNode);
-                  }
-
-                  // if we have already inserted an element, we relate to last
-                  // if not, we must first replace the current child
-
-                  var temp = parentNode;
-                  if (parentNode === null) {
-                    temp = newTextNode;
-                  }
-
-                  if (last === null) { 
-                    element.replaceChild(temp, child);
-                    last = temp;
-                  }
-                  else {
-                    element.insertBefore(temp, last);
-                    last = temp;
-                    childIndex++;
-                  }
-                }
               }
             }
           }
