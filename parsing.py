@@ -3,14 +3,12 @@
 
 import urllib2
 from bs4 import BeautifulSoup
-import time    
+import time
 import json
 
 # url of the page that has the menu on it
 ROOT_ADDR = 'http://catalog.mst.edu';
 MENU_ADDR = 'http://catalog.mst.edu/undergraduate/degreeprogramsandcourses/#text';
-
-
 
 
 def get_html_from_url ( url ):
@@ -107,7 +105,7 @@ def main ( ):
   urls = get_urls();
 
   # master object
-  master = {};
+  master = {'courses':{}, 'departments':[]};
 
   # file to store all the tuples in
   file = open('courses.json', 'w');
@@ -121,6 +119,33 @@ def main ( ):
     # create the course tuples from those pages
     tuples = get_class_tuples_from_html(html);
 
+
+    # the dept name changes every url, so any tuple
+    # will work
+    if len(tuples) > 0:
+      # dept name
+      dept_name = '';
+      first_flag = True;
+      
+      for word in tuples[0][0].split(' '):
+
+        # if the word is a number, we are done
+        # and need not continue
+        if (word.isdigit()):
+          break;
+
+        # do not add a space before the word
+        # if it is the first word being added
+        if first_flag:
+          first_flag = False;
+          dept_name += word;
+
+        # otherwise add a space before the word
+        else:
+          dept_name += ' ' + word;
+
+      master['departments'] += [dept_name];
+
     # add the data into the JSON object
     for tup in tuples:
 
@@ -132,7 +157,7 @@ def main ( ):
 
       # push the tuple to the master with a key value
       # of the course dept + number
-      master[tup[0]] = tup_obj;
+      master['courses'][tup[0]] = tup_obj;
 
   # write the file JSON equivalent (pretty too!)
   file.write( json.dumps(master, indent = 2, sort_keys=True, separators=(',', ': ')) );

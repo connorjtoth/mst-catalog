@@ -10,19 +10,15 @@ var andPart = /\s*\,?(and|\&)?\s+\d{4}/;
 var altogether = new RegExp('(' + fourDigitRE.source + '(' + orPart.source + '|' + andPart.source + ')*)', 'i' );
 //(\d{4}(\s+\(?or\s+\d{4}\)?|\s*\,?(and|\&)?\s+\d{4})*)
 
-// /((\d{4})(\s+\(?or\s+(\d{4})\)?|\s*\,?\s*(and|\&)?\s*(\d{4}))*)/
-console.log(altogether.source);
-console.log(digitsRegex);
 var regexAddendum = digitsRegex;
-console.log(fourDigitRE.source)
-function getRelevantNumbers ( regexResult ) {
 
-  var nums = [];
-  nums = regexResult.match(new RegExp(fourDigitRE.source, 'gi'));
-  return nums;
-}
 
-function drawPopup( contentChild ) {
+function drawPopup ( contentChild, canRemove ) {
+
+  // default value for canRemove is true
+  if ( canRemove === undefined ) {
+    canRemove = true;
+  }
 
   // debounce for clicking on the popup
   var debounce = false;
@@ -85,9 +81,13 @@ function drawPopup( contentChild ) {
     }
   }
 
-  // attach the functions to listeners
-  content.addEventListener('click', onContentClicked);
-  popup.addEventListener('click', onPopupClicked);
+  // attach the functions to listeners if canRemove = true
+  // i.e. allow the bubble to be removed by clicking the 
+  // curtain surrounding the content
+  if ( canRemove === true ) {
+    content.addEventListener('click', onContentClicked);
+    popup.addEventListener('click', onPopupClicked);
+  }
 
   // put the popup together
   content.appendChild(contentChild);
@@ -97,35 +97,33 @@ function drawPopup( contentChild ) {
   return popup;
 }
 
-function createCourseBlock(data) {
-  
-  var block = document.createElement('div');
+function createCourseBlock ( data ) {
+
+  let titleString = data.course_name,
+      descString = data.description;
+
+  let block = document.createElement('div'),
+      blockTitle = document.createElement('p'),
+      titleEm = document.createElement('em'),
+      titleStrong = document.createElement('strong'),
+      blockDesc = document.createElement('p'),
+      titleText = document.createTextNode(titleString),
+      descText = document.createTextNode(descString);
+
   block.className = 'courseblock';
-
-  var blockTitle = document.createElement('p');
   blockTitle.className = 'courseblocktitle';
-
-  var titleEmphasis = document.createElement('em');
-
-  var titleBolding = document.createElement('strong');
-
-  var titleString = data['course_name'];
-
-  var titleText = document.createTextNode(titleString);
-  titleBolding.appendChild(titleText);
-  titleEmphasis.appendChild(titleBolding);
-  blockTitle.appendChild(titleEmphasis);
-  block.appendChild(blockTitle);
-
-  var blockDesc = document.createElement('p');
   blockDesc.className = 'courseblockdesc';
 
-  var descString = data['description'];
+  // create the block title
+  block.appendChild(blockTitle)
+    .appendChild(titleEm)
+    .appendChild(titleStrong)
+    .appendChild(titleText);
 
-  var descText = document.createTextNode(descString);
-  blockDesc.appendChild(descText);
-  block.appendChild(blockDesc);
-
+  // create the description
+  block.appendChild(blockDesc)
+    .appendChild(descText);
+  
   return block;
 }
 
@@ -152,30 +150,61 @@ function loadJSON ( fileUrl, callback ) {
   xobj.send(null);
 }
 
-// global variables: createCourseBlock, drawPopup, fourDigit(s|RE), 
-//  searchRegex, deptNames, 
+
+
+/* createNotice
+ 
+  Creates a splash popup to notify user that the extension is busy working.
+  The notice will not automatically be removed and must have .remove() called
+  on it when it is time to remove it.
+
+  Preconditions: document must be loaded
+  Postconditions: returns reference to notice which has been appended as child
+    to <body> element of document
+*/
+function createNotice ( ) {
+
+  let TITLE_TEXT   = 'Missouri S&T Catalog Assist',
+      MESSAGE_TEXT = 'Updating S&T Catalog Page.\nPlease wait...';
+
+  let titleElement = document.createElement('h2'),
+      msgElement = document.createElement('p'),
+      strongElement = document.createElement('strong'),
+      boxElement = document.createElement('div'),
+      titleText = document.createTextNode(TITLE_TEXT),
+      msgText = document.createTextNode(MESSAGE_TEXT);
+
+  //create the title element
+  boxElement.appendChild(titleElement)
+    .appendChild(strongElement)
+    .appendChild(titleText);
+
+  // create message element
+  boxElement.appendChild(msgElement)
+    .appendChild(msgText);
+
+  return drawPopup(boxElement);
+}
+
 function traverseSplitText ( splitText, element, child, nameIndex, courseData, deptNames, searchRegex ) {
   
   let last = null;
   let childIndexDelta = 0;
+  let activeSplitTextRegex = new RegExp('^(' + searchRegex.source + '|' + fourDigitRE.source + ')$', 'i');
 
-  for (let subIndex = splitText.length - 1; subIndex >= 0; subIndex-- ) {
-    
-    let subText = splitText[subIndex];
+  for (let subText of splitText) {
     
     let newTextNode = document.createTextNode(subText);
 
     let parentNode = null;
-    if ( subText.match(new RegExp('^(' + searchRegex.source + '|' + fourDigitRE.source + ')$', 'i')) ) { 
+    if ( subText.match(activeSplitTextRegex) ) { 
     
-
       let dept = deptNames[nameIndex];
       let num = subText.match( new RegExp(fourDigits, 'i'))[0];
       let key = dept + ' ' + num;
 
-
       parentNode = document.createElement('a');
-      parentNode.href = '#';
+      parentNode.href = '#courseinventory-';
 
       parentNode.addEventListener('click', function ( ) {
         console.log(key);
@@ -187,160 +216,145 @@ function traverseSplitText ( splitText, element, child, nameIndex, courseData, d
       parentNode.appendChild(newTextNode);
     }
 
-    // if we have already inserted an element, we relate to last
-    // if not, we must first replace the current child
-
+    // if the node we are pushing is not the parentNode,
+    // ensure newTextNode is selected 
     var temp = parentNode;
     if (parentNode === null) {
       temp = newTextNode;
     }
 
+    // if no element has been inserted yet, we must replace the current child
     if (last === null) {
       element.replaceChild(temp, child);
     }
+
+    // otherwise, we must push it before the last element placed
     else {
-      element.insertBefore(temp, last);
+      element.insertBefore(temp, last.nextSibling);
       childIndexDelta++;
     }
+
     last = temp;
   }
   return childIndexDelta;
 }
 
+function delayedOnJSONDataLoaded ( response ) {
+  var notice = createNotice ( );
+  window.setTimeout(function ( ) {
+    onJSONDataLoaded(response);
+    notice.remove();
+  }, 200);
+}
 
-chrome.runtime.onMessage.addListener( function (request, sender, sendResponse) {
+
+function onJSONDataLoaded ( response ) {
+
+  console.log('data loaded');
+
+  // create a JSON object with details about all courses offered
+  var jsonData = JSON.parse(response);
+
+  // create a separate list of only the Dept + Course Numbers exactly as
+  // used as the keys in courseData
+  var courseData = jsonData.courses;
+  var courseNames = Object.keys(courseData);
+
+  // list of strings used as prefixes for each department
+  var deptNames = jsonData.departments;
+  
+  // list of regexps where any whitespace can separate words
+  var regExpDeptNames = [];
+
+  for ( var deptName of deptNames ) {
+    var newRegExpDeptName = deptName.replace(/\s+/, '\\s+');
+    regExpDeptNames.push(newRegExpDeptName);
+  }
+
+  // create a non-live list of all elements in the document
+  var elements = document.body.querySelectorAll('*');
+
+  // look through each element
+  for ( var element of elements ) {
+    
+    // only elements to consider are those which are not already hyperlinks
+    if ( element.tagName === 'A' && element.href !== '' ) {
+      continue;
+    }
+
+    // look through each department name
+    for ( let nameIndex = 0; nameIndex < deptNames.length; nameIndex++ ) {
+      
+      // for each element, look at its children nodes
+      for ( var childIndex = 0; childIndex < element.childNodes.length; childIndex++ ) {
+        var child = element.childNodes[childIndex];
+      
+        // if the child is a text node, then examine it further
+        if ( child.nodeType === Node.TEXT_NODE ) {
+
+          var childText = child.nodeValue;
+          var splitText = [];
+
+          var searchRegex = new RegExp( regExpDeptNames[nameIndex] + '\\s+' + regexAddendum, 'i');
+          
+          // if we found a course dept + number then we continue
+          let result = childText.match(searchRegex);
+
+          if ( result !== null ) {
+
+            let resultString = result[0];
+            let resultStart = result.index;
+            let resultEnd = resultStart + resultString.length;
+            
+            let nums = resultString.match(new RegExp(fourDigitRE.source, 'gi'));
+
+            let splitPoints = [0, resultStart];
+
+            for ( let num of nums ) {
+              let firstIndex = resultStart + resultString.indexOf(num);
+              splitPoints.push(firstIndex);
+              splitPoints.push(firstIndex + 4);
+            }
+
+            if ( splitPoints.length >= 2 ) {
+              splitPoints.splice(2, 1);
+            }
+            
+            splitPoints.push(resultEnd);
+
+            let lastPoint = splitPoints[0];
+            for ( let point of splitPoints ) {
+              if (point == splitPoints[0]) continue;
+              splitText.push(childText.slice(lastPoint, point));
+              lastPoint = point;
+            }
+            splitText.push(childText.slice(resultEnd));
+
+            
+            console.log(splitText.join('') === childText);
+
+            
+            childIndex += traverseSplitText(splitText, element, child, nameIndex, courseData, deptNames, searchRegex )
+            childIndex--;
+            
+          }
+        }
+      }
+    }
+  }
+  console.log('All done!');
+}
+
+
+function chromeMessageListener ( request, sender, sendResponse ) {
 
   // this code only executes if the extension button is pressed
-  if ( request.message === 'clicked_browser_action' ) { 
+  if ( request.message === 'clicked_browser_action' ) {
 
-    // load the course data
-    loadJSON(chrome.extension.getURL('courses.json'), function ( response ) {
-
-      console.log('data loaded');
-
-      // create a JSON object with details about all courses offered
-      var courseData = JSON.parse(response);
-
-      // create a separate list of only the Dept + Course Numbers exactly as
-      // used as the keys in courseData
-      var courseNames = Object.keys(courseData);
-
-      // create a list of only the prefixes used by each department
-      var deptNames = [];
-      var regExpDeptNames = [];
-      
-      // create a separate list of regular expressions where whitespace of
-      // any kind can be used to separate the words
-      var regExpNames = [];
-      for ( var courseName of courseNames ) {
-
-        var newDeptName = '';
-        var newRegExpDeptname = '';
-        for (word of courseName.split(' ')) {
-          if (word.match(/\d/)) {
-            break;
-          }
-          if (newDeptName !== '') {
-            newDeptName += ' ';
-            newRegExpDeptname += '\\s+'
-          }
-          newDeptName += word;
-          newRegExpDeptname += word;
-        }
-
-        if (!deptNames.includes(newDeptName)) {
-          deptNames.push(newDeptName);
-          regExpDeptNames.push(newRegExpDeptname);
-        }
-        
-        // replace spaces with arbitrary whitespace
-        var regExpName = courseName.replace(/\s+/gi, '[\\s+]');
-
-        // create a capturing case-insensitive regular expression version
-        // of the courseName and push it to the list
-        var captureRegExpName = new RegExp('\(' + regExpName + '\)', 'i');
-        regExpNames.push(captureRegExpName);
-      }
-
-
-      // create a non-live list of all elements in the document
-      var elements = document.querySelectorAll('*');
-
-      // look through each element
-      for ( var element of elements ) {
-        
-        // if the element is already an element, then we do not need to even
-        // try doing anything with it
-        if ( element.tagName === 'A' && element.href !== ''){
-          continue;
-        }
-
-        // look through each department name
-        for ( let nameIndex = 0; nameIndex < deptNames.length; nameIndex++ ) {
-          
-          // for each element, we look at its children nodes
-          for ( var childIndex = 0; childIndex < element.childNodes.length; childIndex++ ) {
-            var child = element.childNodes[childIndex];
-          
-        
-            // if the child is a text node, then we examine it further
-            if ( child.nodeType === Node.TEXT_NODE ) {
-
-              var childText = child.nodeValue;
-              var splitText = [];
-
-              var searchRegex = new RegExp( regExpDeptNames[nameIndex] + '\\s+' + regexAddendum, 'i');
-              
-              // if we found a course dept + number then we continue
-              let result = childText.match(searchRegex);
-              if ( result !== null ) {
-
-                let resultString = result[0];
-                let resultStart = result.index;
-                let resultEnd = resultStart + resultString.length;
-                
-                let nums = getRelevantNumbers(resultString);
-
-                let splitPoints = [0, resultStart];
-
-                for ( let num of nums ) {
-                  let firstIndex = resultStart + resultString.indexOf(num);
-                  splitPoints.push(firstIndex);
-                  splitPoints.push(firstIndex + 4);
-                }
-
-                if ( splitPoints.length >= 2 ) {
-                  splitPoints.splice(2, 1);
-                }
-                
-                splitPoints.push(resultEnd);
-
-                let lastPoint = splitPoints[0];
-                for ( let point of splitPoints ) {
-
-                  if (point == splitPoints[0]) continue;
-                  splitText.push(childText.slice(lastPoint, point));
-                  lastPoint = point;
-                }
-                splitText.push(childText.slice(resultEnd));
-
-                
-                console.log(splitText.join('') === childText);
-
-                
-                childIndex += traverseSplitText(splitText, element, child, nameIndex, courseData, deptNames, searchRegex )
-                childIndex--;
-                
-              }
-            }
-          }
-        }
-      }
-
-      console.log('All done!');
-
-    });
-
+    let dataURL = chrome.extension.getURL('courses.json');
+    loadJSON(dataURL, delayedOnJSONDataLoaded);
   }
-  
-})
+}
+
+
+chrome.runtime.onMessage.addListener(chromeMessageListener);

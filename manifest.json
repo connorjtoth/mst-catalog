@@ -1,7 +1,15 @@
 {
   "manifest_version": 2,
   "name": "Missouri S&T Catalog Assist",
-  "version": "0.9",
+  "version": "0.11",
+  "author": "Connor J. Toth",
+  "description": "Enhances experience on Missouri S&T Course Catalog",
+  
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
 
   "content_scripts": [
     {
